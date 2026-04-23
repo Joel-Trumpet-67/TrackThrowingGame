@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Throwers Game</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <h1>Throwers Game</h1>
+        <p>Compete in discus, shot put, hammer throw, and javelin over a 6-attempt round.</p>
+      </header>
+
+      <section class="panel controls">
+        <h2>Setup Throw</h2>
+
+        <label for="event">Event</label>
+        <select id="event">
+          <option value="discus">Discus</option>
+          <option value="shotPut">Shot Put</option>
+          <option value="hammer">Hammer Throw</option>
+          <option value="javelin">Javelin</option>
+        </select>
+
+        <label for="athlete">Athlete Type</label>
+        <select id="athlete">
+          <option value="balanced">Balanced</option>
+          <option value="power">Power Specialist</option>
+          <option value="technique">Technique Specialist</option>
+        </select>
+
+        <label for="power">Power (<span id="powerValue">78</span>%)</label>
+        <input id="power" type="range" min="40" max="100" value="78" />
+
+        <label for="angle">Release Angle (<span id="angleValue">37</span>°)</label>
+        <input id="angle" type="range" min="20" max="50" value="37" />
+
+        <button id="throwBtn">Throw!</button>
+        <button id="newRoundBtn" class="secondary">Start New 6-Throw Round</button>
+        <button id="resetBtn" class="secondary">Reset Session</button>
+      </section>
+
+      <section class="panel results">
+        <h2>Results</h2>
+        <p id="eventDescription"></p>
+
+        <div class="stats">
+          <div>
+            <span class="label">Last Throw</span>
+            <strong id="lastThrow">-- m</strong>
+          </div>
+          <div>
+            <span class="label">Best Throw</span>
+            <strong id="bestThrow">-- m</strong>
+          </div>
+          <div>
+            <span class="label">Session Attempts</span>
+            <strong id="attempts">0</strong>
+          </div>
+        </div>
+
+        <div class="round-meta">
+          <p><strong>Round Attempt:</strong> <span id="roundAttempt">0</span>/6</p>
+          <p><strong>Wind:</strong> <span id="wind">0.0 m/s</span></p>
+          <p><strong>Status:</strong> <span id="status">Round ready.</span></p>
+        </div>
+
+        <h3>Top Round Ranking</h3>
+        <ol id="ranking"></ol>
+
+        <h3>Throw Log</h3>
+        <ol id="history"></ol>
+
+        <h3>Personal Records (saved)</h3>
+        <ul id="records"></ul>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

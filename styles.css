@@ -1,0 +1,152 @@
+:root {
+  color-scheme: dark;
+  --bg: #101820;
+  --panel: #1f2d3a;
+  --line: #2e4355;
+  --accent: #ffc857;
+  --accent-2: #4da8da;
+  --good: #67d17a;
+  --text: #f5f7fa;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background: radial-gradient(circle at top, #203447, var(--bg));
+}
+
+.app {
+  width: min(1040px, 92vw);
+  margin: 2rem auto;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr 1.1fr;
+}
+
+header {
+  grid-column: 1 / -1;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0 0 0.75rem;
+}
+
+.panel {
+  background: color-mix(in hsl, var(--panel), black 10%);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.controls {
+  display: grid;
+  gap: 0.6rem;
+}
+
+label {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+select,
+input,
+button {
+  width: 100%;
+  padding: 0.55rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+button {
+  border: none;
+  font-weight: 700;
+  background: var(--accent);
+  color: #1f1f1f;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.stats div,
+.round-meta {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.7rem;
+  background: color-mix(in hsl, var(--panel), white 2%);
+}
+
+.round-meta {
+  margin-bottom: 1rem;
+}
+
+.round-meta p {
+  margin-bottom: 0.4rem;
+}
+
+.round-meta p:last-child {
+  margin-bottom: 0;
+}
+
+.label {
+  display: block;
+  color: var(--accent-2);
+  font-size: 0.8rem;
+}
+
+#status {
+  color: var(--good);
+}
+
+#history,
+#ranking,
+#records {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+  max-height: 180px;
+  overflow: auto;
+}
+
+#history li,
+#ranking li,
+#records li {
+  margin-bottom: 0.45rem;
+}
+
+@media (max-width: 780px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  .stats {
+    grid-template-columns: 1fr;
+  }
+}
