@@ -8,137 +8,135 @@
   </head>
   <body>
     <main class="app">
-      <header>
-        <h1>Throwers Game</h1>
-        <p>Time your throw — lock the angle, then the power, and launch!</p>
+
+      <!-- HUD bar -->
+      <header class="hud-bar">
+        <div class="hud-title">THROWERS GAME</div>
+        <div class="hud-stat"><span class="hud-label">ATTEMPT</span><span id="hudAttempt">0/6</span></div>
+        <div class="hud-stat"><span class="hud-label">BEST</span><span id="hudBest">-- m</span></div>
+        <div class="hud-stat"><span class="hud-label">WIND</span><span id="hudWind">0.0 m/s</span></div>
+        <div class="hud-stat"><span class="hud-label">EVENT</span><span id="hudEvent">Discus</span></div>
       </header>
 
-      <section class="panel controls">
-        <h2>Setup</h2>
+      <!-- Canvas field -->
+      <div class="canvas-wrap">
+        <canvas id="fieldCanvas"></canvas>
+      </div>
 
-        <label for="playerName">Player Name</label>
-        <input id="playerName" type="text" maxlength="24" placeholder="Enter your name" value="Athlete" />
-
-        <label for="event">Event</label>
-        <select id="event">
-          <option value="discus">Discus</option>
-          <option value="shotPut">Shot Put</option>
-          <option value="hammer">Hammer Throw</option>
-          <option value="javelin">Javelin</option>
-        </select>
-
-        <label for="athlete">Athlete Type</label>
-        <select id="athlete">
-          <option value="balanced">Balanced</option>
-          <option value="power">Power Specialist</option>
-          <option value="technique">Technique Specialist</option>
-        </select>
-
-        <div class="timing-section">
-          <div class="phase-bar">
-            <div class="phase-step" id="phaseAngleStep">
-              <span class="phase-num">1</span> Angle
-            </div>
-            <span class="phase-arrow">›</span>
-            <div class="phase-step" id="phasePowerStep">
-              <span class="phase-num">2</span> Power
-            </div>
-            <span class="phase-arrow">›</span>
-            <div class="phase-step" id="phaseThrowStep">
-              <span class="phase-num">3</span> Launch!
-            </div>
+      <!-- Controls row -->
+      <section class="controls-row">
+        <div class="controls-left">
+          <div class="ctrl-field">
+            <label for="playerName">Player</label>
+            <input id="playerName" type="text" maxlength="24" placeholder="Athlete" value="Athlete" />
           </div>
-
-          <div class="meter-group" id="angleMeterGroup">
-            <div class="meter-header">
-              <span class="meter-title">Release Angle</span>
-              <strong class="meter-val" id="angleMeterVal">--°</strong>
-            </div>
-            <div class="timing-meter" id="angleMeter" role="button" tabindex="0"
-                 aria-label="Angle timing meter — click or press Space to lock">
-              <div class="sweet-zone" id="angleSweetZone"></div>
-              <div class="timing-cursor" id="angleCursor"></div>
-            </div>
-            <div class="meter-foot">
-              <span class="meter-hint">Ideal: <span id="idealAngleHint">--</span>° (green zone)</span>
-              <span class="prec-badge" id="anglePrecBadge"></span>
-            </div>
+          <div class="ctrl-field">
+            <label for="event">Event</label>
+            <select id="event">
+              <option value="discus">Discus</option>
+              <option value="shotPut">Shot Put</option>
+              <option value="hammer">Hammer Throw</option>
+              <option value="javelin">Javelin</option>
+            </select>
           </div>
-
-          <div class="meter-group" id="powerMeterGroup">
-            <div class="meter-header">
-              <span class="meter-title">Power</span>
-              <strong class="meter-val" id="powerMeterVal">--%</strong>
-            </div>
-            <div class="timing-meter" id="powerMeter" role="button" tabindex="0"
-                 aria-label="Power timing meter — click or press Space to lock">
-              <div class="sweet-zone" id="powerSweetZone"></div>
-              <div class="timing-cursor" id="powerCursor"></div>
-            </div>
-            <div class="meter-foot">
-              <span class="meter-hint">Ideal: 82–94%</span>
-              <span class="prec-badge" id="powerPrecBadge"></span>
-            </div>
+          <div class="ctrl-field">
+            <label for="athlete">Athlete</label>
+            <select id="athlete">
+              <option value="balanced">Balanced</option>
+              <option value="power">Power Specialist</option>
+              <option value="technique">Technique Specialist</option>
+            </select>
+          </div>
+          <div class="toggle-row">
+            <label class="toggle-label" for="windToggle">Wind Effects</label>
+            <label class="switch">
+              <input id="windToggle" type="checkbox" checked />
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+          <div class="action-btns">
+            <button id="newRoundBtn" class="secondary btn-sm">New Round</button>
+            <button id="resetBtn" class="secondary btn-sm">Reset</button>
           </div>
         </div>
 
-        <div class="toggle-row">
-          <label class="toggle-label" for="windToggle">Wind Effects</label>
-          <label class="switch">
-            <input id="windToggle" type="checkbox" checked />
-            <span class="slider-toggle"></span>
-          </label>
-        </div>
+        <div class="controls-right">
+          <div class="timing-section">
+            <div class="phase-bar">
+              <div class="phase-step" id="phaseAngleStep"><span class="phase-num">1</span> Angle</div>
+              <span class="phase-arrow">›</span>
+              <div class="phase-step" id="phasePowerStep"><span class="phase-num">2</span> Power</div>
+              <span class="phase-arrow">›</span>
+              <div class="phase-step" id="phaseThrowStep"><span class="phase-num">3</span> Launch!</div>
+            </div>
 
-        <button id="throwBtn">Start Throw!</button>
-        <p class="key-hint">Click meter or press <kbd>Space</kbd> to lock in</p>
-        <button id="newRoundBtn" class="secondary">Start New 6-Throw Round</button>
-        <button id="resetBtn" class="secondary">Reset Session</button>
+            <div class="meter-group" id="angleMeterGroup">
+              <div class="meter-header">
+                <span class="meter-title">Release Angle</span>
+                <strong class="meter-val" id="angleMeterVal">--°</strong>
+              </div>
+              <div class="timing-meter" id="angleMeter" role="button" tabindex="0"
+                   aria-label="Angle timing meter — click or press Space to lock">
+                <div class="sweet-zone" id="angleSweetZone"></div>
+                <div class="timing-cursor" id="angleCursor"></div>
+              </div>
+              <div class="meter-foot">
+                <span class="meter-hint">Ideal: <span id="idealAngleHint">--</span>° (green zone)</span>
+                <span class="prec-badge" id="anglePrecBadge"></span>
+              </div>
+            </div>
+
+            <div class="meter-group" id="powerMeterGroup">
+              <div class="meter-header">
+                <span class="meter-title">Power</span>
+                <strong class="meter-val" id="powerMeterVal">--%</strong>
+              </div>
+              <div class="timing-meter" id="powerMeter" role="button" tabindex="0"
+                   aria-label="Power timing meter — click or press Space to lock">
+                <div class="sweet-zone" id="powerSweetZone"></div>
+                <div class="timing-cursor" id="powerCursor"></div>
+              </div>
+              <div class="meter-foot">
+                <span class="meter-hint">Ideal: 82–94%</span>
+                <span class="prec-badge" id="powerPrecBadge"></span>
+              </div>
+            </div>
+          </div>
+
+          <button id="throwBtn" class="throw-btn">Start Throw!</button>
+          <p class="key-hint">Click meter or press <kbd>Space</kbd> to lock in</p>
+        </div>
       </section>
 
-      <section class="panel results">
-        <h2>Results</h2>
-        <p id="eventDescription"></p>
+      <!-- Info bar -->
+      <div class="info-bar">
+        <span><span class="info-label">Last Throw:</span> <strong id="lastThrow">-- m</strong></span>
+        <span><span class="info-label">Status:</span> <span id="status">Select event and press Start Throw!</span></span>
+        <span><span class="info-label">Attempts:</span> <strong id="attempts">0</strong></span>
+      </div>
 
-        <div class="stats">
-          <div>
-            <span class="label">Last Throw</span>
-            <strong id="lastThrow">-- m</strong>
-          </div>
-          <div>
-            <span class="label">Best Throw</span>
-            <strong id="bestThrow">-- m</strong>
-          </div>
-          <div>
-            <span class="label">Session Attempts</span>
-            <strong id="attempts">0</strong>
-          </div>
-        </div>
+      <!-- Bottom panels -->
+      <div class="bottom-panels">
+        <section class="panel records-panel">
+          <h3>Personal Records</h3>
+          <ul id="records"></ul>
+          <h3 style="margin-top:1rem">Top Round</h3>
+          <ol id="ranking"></ol>
+        </section>
 
-        <div class="round-meta">
-          <p><strong>Round Attempt:</strong> <span id="roundAttempt">0</span>/6</p>
-          <p><strong>Wind:</strong> <span id="wind">0.0 m/s</span></p>
-          <p><strong>Status:</strong> <span id="status">Select event and press Start Throw!</span></p>
-        </div>
+        <section class="panel history-panel">
+          <h3>Throw Log</h3>
+          <ol id="history"></ol>
+        </section>
 
-        <h3>Top Round Ranking</h3>
-        <ol id="ranking"></ol>
+        <section class="panel leaderboard-panel">
+          <h3>Leaderboard</h3>
+          <div class="lb-event-tabs" id="lbTabs"></div>
+          <ol id="leaderboard"></ol>
+        </section>
+      </div>
 
-        <h3>Throw Log</h3>
-        <ol id="history"></ol>
-
-        <h3>Personal Records (saved)</h3>
-        <ul id="records"></ul>
-      </section>
-
-      <section class="panel leaderboard-panel">
-        <h2>Leaderboard</h2>
-        <div class="lb-event-tabs" id="lbTabs"></div>
-        <ol id="leaderboard"></ol>
-      </section>
     </main>
-
-    <div id="throwAnim" class="throw-anim" aria-hidden="true"></div>
 
     <script src="script.js"></script>
   </body>
