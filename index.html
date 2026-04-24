@@ -16,6 +16,9 @@
       <section class="panel controls">
         <h2>Setup Throw</h2>
 
+        <label for="playerName">Player Name</label>
+        <input id="playerName" type="text" maxlength="24" placeholder="Enter your name" value="Athlete" />
+
         <label for="event">Event</label>
         <select id="event">
           <option value="discus">Discus</option>
@@ -36,6 +39,14 @@
 
         <label for="angle">Release Angle (<span id="angleValue">37</span>°)</label>
         <input id="angle" type="range" min="20" max="50" value="37" />
+
+        <div class="toggle-row">
+          <label class="toggle-label" for="windToggle">Wind Effects</label>
+          <label class="switch">
+            <input id="windToggle" type="checkbox" checked />
+            <span class="slider-toggle"></span>
+          </label>
+        </div>
 
         <button id="throwBtn">Throw!</button>
         <button id="newRoundBtn" class="secondary">Start New 6-Throw Round</button>
@@ -76,7 +87,15 @@
         <h3>Personal Records (saved)</h3>
         <ul id="records"></ul>
       </section>
+
+      <section class="panel leaderboard-panel">
+        <h2>Leaderboard</h2>
+        <div class="lb-event-tabs" id="lbTabs"></div>
+        <ol id="leaderboard"></ol>
+      </section>
     </main>
+
+    <div id="throwAnim" class="throw-anim" aria-hidden="true"></div>
 
     <script src="script.js"></script>
   </body>
