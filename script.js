@@ -1,15 +1,11 @@
 // --- DOM refs ---
-const eventSelect      = document.getElementById('event');
-const athleteSelect    = document.getElementById('athlete');
-const playerNameInput  = document.getElementById('playerName');
-const powerInput       = document.getElementById('power');
-const angleInput       = document.getElementById('angle');
-const windToggle       = document.getElementById('windToggle');
-const powerValue       = document.getElementById('powerValue');
-const angleValue       = document.getElementById('angleValue');
-const throwBtn         = document.getElementById('throwBtn');
-const newRoundBtn      = document.getElementById('newRoundBtn');
-const resetBtn         = document.getElementById('resetBtn');
+const eventSelect     = document.getElementById('event');
+const athleteSelect   = document.getElementById('athlete');
+const playerNameInput = document.getElementById('playerName');
+const windToggle      = document.getElementById('windToggle');
+const throwBtn        = document.getElementById('throwBtn');
+const newRoundBtn     = document.getElementById('newRoundBtn');
+const resetBtn        = document.getElementById('resetBtn');
 
 const eventDescription = document.getElementById('eventDescription');
 const lastThrow        = document.getElementById('lastThrow');
@@ -25,11 +21,35 @@ const lbTabs           = document.getElementById('lbTabs');
 const leaderboardEl    = document.getElementById('leaderboard');
 const throwAnimEl      = document.getElementById('throwAnim');
 
+// Timing meter DOM refs
+const angleMeterGroup = document.getElementById('angleMeterGroup');
+const angleMeter      = document.getElementById('angleMeter');
+const angleCursor     = document.getElementById('angleCursor');
+const angleSweetZone  = document.getElementById('angleSweetZone');
+const angleMeterVal   = document.getElementById('angleMeterVal');
+const idealAngleHint  = document.getElementById('idealAngleHint');
+const anglePrecBadge  = document.getElementById('anglePrecBadge');
+
+const powerMeterGroup = document.getElementById('powerMeterGroup');
+const powerMeter      = document.getElementById('powerMeter');
+const powerCursor     = document.getElementById('powerCursor');
+const powerSweetZone  = document.getElementById('powerSweetZone');
+const powerMeterVal   = document.getElementById('powerMeterVal');
+const powerPrecBadge  = document.getElementById('powerPrecBadge');
+
+const phaseAngleStep = document.getElementById('phaseAngleStep');
+const phasePowerStep = document.getElementById('phasePowerStep');
+const phaseThrowStep = document.getElementById('phaseThrowStep');
+
 // --- Constants ---
 const RECORDS_KEY     = 'throwers-game-records-v1';
 const LEADERBOARD_KEY = 'throwers-game-lb-v1';
 const MAX_ROUND       = 6;
 const LB_MAX          = 10;
+const POWER_SWEET_MIN = 82;
+const POWER_SWEET_MAX = 94;
+const POWER_MIN       = 40;
+const POWER_MAX       = 100;
 
 // --- Event & athlete profiles ---
 const EVENT_PROFILES = {
@@ -41,7 +61,9 @@ const EVENT_PROFILES = {
     anglePenalty: 0.03,
     variability: 2.8,
     foulAngleRange: [26, 47],
-    description: 'Discus rewards smooth technique and a medium release angle.'
+    description: 'Discus rewards smooth technique and a medium release angle.',
+    // cursor speed in units per animation frame (~60fps)
+    speeds: { angle: 0.28, power: 0.44 }
   },
   shotPut: {
     name: 'Shot Put',
@@ -51,7 +73,8 @@ const EVENT_PROFILES = {
     anglePenalty: 0.04,
     variability: 1.9,
     foulAngleRange: [30, 49],
-    description: 'Shot put favors raw force and compact, explosive form.'
+    description: 'Shot put favors raw force and compact, explosive form.',
+    speeds: { angle: 0.20, power: 0.32 }
   },
   hammer: {
     name: 'Hammer Throw',
@@ -61,7 +84,8 @@ const EVENT_PROFILES = {
     anglePenalty: 0.025,
     variability: 3.2,
     foulAngleRange: [31, 50],
-    description: 'Hammer throw has high speed potential but variable timing.'
+    description: 'Hammer throw has the highest potential but demands fast reflexes.',
+    speeds: { angle: 0.52, power: 0.70 }
   },
   javelin: {
     name: 'Javelin',
@@ -71,7 +95,8 @@ const EVENT_PROFILES = {
     anglePenalty: 0.02,
     variability: 2.4,
     foulAngleRange: [22, 43],
-    description: 'Javelin rewards precise release with efficient aerodynamics.'
+    description: 'Javelin rewards precise release with efficient aerodynamics.',
+    speeds: { angle: 0.36, power: 0.52 }
   }
 };
 
@@ -81,7 +106,7 @@ const ATHLETE_PROFILES = {
   technique: { velocityBoost: 0.94, control: 1.15, label: 'Technique Specialist' }
 };
 
-// --- State ---
+// --- App state ---
 const state = {
   attempts: 0,
   roundAttempt: 0,
@@ -92,6 +117,16 @@ const state = {
   records: loadRecords(),
   leaderboard: loadLeaderboard(),
   activeLbEvent: 'discus'
+};
+
+// --- Timing game state ---
+const timing = {
+  phase: 'idle', // 'idle' | 'angle' | 'power'
+  angle: { current: 35, dir: 1 },
+  power: { current: POWER_MIN, dir: 1 },
+  lockedAngle: null,
+  lockedPower: null,
+  animFrame: null
 };
 
 // --- Persistence ---
@@ -113,7 +148,7 @@ function saveLeaderboard() {
   localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(state.leaderboard));
 }
 
-// --- Audio (Web Audio API, no files needed) ---
+// --- Audio (Web Audio API) ---
 let audioCtx = null;
 
 function getAudioCtx() {
@@ -135,7 +170,16 @@ function playTone(freq, duration, type = 'sine', gain = 0.25) {
     vol.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + duration);
-  } catch { /* audio blocked by browser – silent fail */ }
+  } catch { /* audio blocked – silent fail */ }
+}
+
+function soundLock() {
+  playTone(1200, 0.06, 'square', 0.10);
+}
+
+function soundLockPerfect() {
+  playTone(880, 0.05, 'sine', 0.14);
+  setTimeout(() => playTone(1320, 0.08, 'sine', 0.12), 55);
 }
 
 function soundThrow() {
@@ -152,10 +196,10 @@ function soundFoul() {
   setTimeout(() => playTone(140, 0.3, 'square', 0.15), 150);
 }
 
-// --- Animation ---
+// --- Throw animation overlay ---
 function animateThrow(foul, isRecord) {
   throwAnimEl.classList.remove('animate', 'animate-foul');
-  void throwAnimEl.offsetWidth; // reflow to restart animation
+  void throwAnimEl.offsetWidth;
   if (foul) {
     throwAnimEl.textContent = '❌';
     throwAnimEl.classList.add('animate-foul');
@@ -163,8 +207,7 @@ function animateThrow(foul, isRecord) {
     throwAnimEl.textContent = '🏆';
     throwAnimEl.classList.add('animate');
   } else {
-    const ev = EVENT_PROFILES[eventSelect.value];
-    throwAnimEl.textContent = ev.emoji;
+    throwAnimEl.textContent = EVENT_PROFILES[eventSelect.value].emoji;
     throwAnimEl.classList.add('animate');
   }
 }
@@ -194,7 +237,6 @@ function calculateThrow(eventKey, athleteKey, power, angle) {
   return { foul: false, distance };
 }
 
-// --- Formatting ---
 const fmt = (m) => `${m.toFixed(2)} m`;
 
 // --- Wind ---
@@ -209,17 +251,16 @@ function generateWind() {
   windEl.textContent = `${dir}${state.wind.toFixed(1)} m/s`;
 }
 
-// --- Leaderboard helpers ---
+// --- Leaderboard ---
 function submitToLeaderboard(eventKey, name, distance) {
   if (!state.leaderboard[eventKey]) state.leaderboard[eventKey] = [];
   state.leaderboard[eventKey].push({ name: name.trim() || 'Athlete', distance });
   state.leaderboard[eventKey].sort((a, b) => b.distance - a.distance);
-  if (state.leaderboard[eventKey].length > LB_MAX)
-    state.leaderboard[eventKey].length = LB_MAX;
+  if (state.leaderboard[eventKey].length > LB_MAX) state.leaderboard[eventKey].length = LB_MAX;
   saveLeaderboard();
 }
 
-// --- Render functions ---
+// --- Render ---
 function renderDescription() {
   eventDescription.textContent = EVENT_PROFILES[eventSelect.value].description;
 }
@@ -232,7 +273,7 @@ function renderHistory() {
       li.textContent = `#${e.attempt} ${e.event} (${e.athlete}) → FOUL at ${e.angle}° / ${e.power}%`;
       li.className = 'entry-foul';
     } else {
-      const rec = e.isRecord ? ' ★ PR!' : '';
+      const rec  = e.isRecord ? ' ★ PR!' : '';
       const wind = windToggle.checked ? ` (wind ${e.wind >= 0 ? '+' : ''}${e.wind.toFixed(1)} m/s)` : '';
       li.textContent = `#${e.attempt} ${e.event} (${e.athlete}) → ${fmt(e.distance)} at ${e.angle}°/${e.power}%${wind}${rec}`;
       if (e.isRecord) li.className = 'entry-record';
@@ -258,7 +299,7 @@ function renderRecords() {
   recordsList.innerHTML = '';
   Object.keys(EVENT_PROFILES).forEach((k) => {
     const li = document.createElement('li');
-    const v = state.records[k];
+    const v  = state.records[k];
     li.textContent = v ? `${EVENT_PROFILES[k].name}: ${fmt(v)}` : `${EVENT_PROFILES[k].name}: --`;
     recordsList.appendChild(li);
   });
@@ -283,14 +324,12 @@ function renderLeaderboard() {
   const currentPlayer = playerNameInput.value.trim() || 'Athlete';
   const entries = state.leaderboard[state.activeLbEvent] ?? [];
   leaderboardEl.innerHTML = '';
-
   if (!entries.length) {
     leaderboardEl.innerHTML = '<li style="list-style:none;opacity:0.6">No entries yet.</li>';
     return;
   }
-
   entries.forEach((e, i) => {
-    const li = document.createElement('li');
+    const li    = document.createElement('li');
     const isYou = e.name === currentPlayer;
     if (isYou) li.className = 'lb-you';
     li.innerHTML = `<span class="lb-name">${i + 1}. ${e.name}${isYou ? ' (you)' : ''}</span><span class="lb-dist">${fmt(e.distance)}</span>`;
@@ -298,30 +337,189 @@ function renderLeaderboard() {
   });
 }
 
-// --- Core throw handler ---
-function handleThrow() {
-  if (state.roundAttempt >= MAX_ROUND) {
-    statusEl.textContent = 'Round complete. Click "Start New 6-Throw Round".';
-    return;
-  }
+// --- Timing game helpers ---
 
+function speedMultiplier() {
+  // Gently increases speed across the round (1.0 → 1.25 by attempt 5)
+  return 1.0 + Math.min(state.roundAttempt * 0.05, 0.30);
+}
+
+function positionSweetZones() {
+  const event = EVENT_PROFILES[eventSelect.value];
+  const [minA, maxA] = event.foulAngleRange;
+  const rangeA    = maxA - minA;
+  const zoneHalfA = 4; // ±4° sweet zone
+  const leftA  = Math.max(0, ((event.idealAngle - zoneHalfA - minA) / rangeA) * 100);
+  const widthA = Math.min(100 - leftA, (zoneHalfA * 2 / rangeA) * 100);
+  angleSweetZone.style.left  = `${leftA}%`;
+  angleSweetZone.style.width = `${widthA}%`;
+  idealAngleHint.textContent = event.idealAngle;
+
+  const powerRange = POWER_MAX - POWER_MIN;
+  const leftP  = ((POWER_SWEET_MIN - POWER_MIN) / powerRange) * 100;
+  const widthP = ((POWER_SWEET_MAX - POWER_SWEET_MIN) / powerRange) * 100;
+  powerSweetZone.style.left  = `${leftP}%`;
+  powerSweetZone.style.width = `${widthP}%`;
+}
+
+function showPrecBadge(el, value, ideal, tolerance) {
+  const diff = Math.abs(value - ideal);
+  let label, cls;
+  if (diff <= tolerance * 0.25)      { label = 'PERFECT!'; cls = 'prec-perfect'; soundLockPerfect(); }
+  else if (diff <= tolerance * 0.55) { label = 'GREAT';    cls = 'prec-great';   soundLock(); }
+  else if (diff <= tolerance)        { label = 'GOOD';      cls = 'prec-good';    soundLock(); }
+  else                               { label = 'OFF';       cls = 'prec-off';     soundLock(); }
+
+  el.textContent = label;
+  el.className   = `prec-badge ${cls} visible`;
+  setTimeout(() => { el.className = 'prec-badge'; }, 1800);
+}
+
+function setPhaseActive(phase) {
+  phaseAngleStep.className = 'phase-step' +
+    (phase === 'angle' ? ' active' : (phase === 'power' || phase === 'done' ? ' done' : ''));
+  phasePowerStep.className = 'phase-step' +
+    (phase === 'power' ? ' active' : (phase === 'done' ? ' done' : ''));
+  phaseThrowStep.className = 'phase-step' + (phase === 'done' ? ' active' : '');
+
+  angleMeterGroup.className = 'meter-group' +
+    (phase === 'angle' ? ' meter-active' : (phase === 'power' || phase === 'done' ? ' meter-locked' : ''));
+  powerMeterGroup.className = 'meter-group' +
+    (phase === 'power' ? ' meter-active' : (phase === 'done' ? ' meter-locked' : ''));
+}
+
+function resetTimingUI() {
+  angleCursor.classList.remove('locked');
+  powerCursor.classList.remove('locked');
+  angleCursor.style.left  = '0%';
+  powerCursor.style.left  = '0%';
+  angleMeterVal.textContent = '--°';
+  powerMeterVal.textContent = '--%';
+  anglePrecBadge.className = 'prec-badge';
+  powerPrecBadge.className = 'prec-badge';
+}
+
+function lockControls(locked) {
+  eventSelect.disabled   = locked;
+  athleteSelect.disabled = locked;
+}
+
+// --- Timing phases ---
+
+function startAnglePhase() {
+  if (state.roundAttempt >= MAX_ROUND) return;
+
+  cancelAnimationFrame(timing.animFrame);
+  timing.phase        = 'angle';
+  timing.lockedAngle  = null;
+  timing.lockedPower  = null;
+
+  const event = EVENT_PROFILES[eventSelect.value];
+  const [minA, maxA] = event.foulAngleRange;
+  timing.angle.current = minA;
+  timing.angle.dir     = 1;
+
+  resetTimingUI();
+  positionSweetZones();
+  setPhaseActive('angle');
+  throwBtn.textContent = 'Lock Angle!';
+  lockControls(true);
+
+  const speed = event.speeds.angle * speedMultiplier();
+
+  (function animate() {
+    if (timing.phase !== 'angle') return;
+
+    timing.angle.current += speed * timing.angle.dir;
+    if (timing.angle.current >= maxA) { timing.angle.current = maxA; timing.angle.dir = -1; }
+    else if (timing.angle.current <= minA) { timing.angle.current = minA; timing.angle.dir = 1; }
+
+    const pct = ((timing.angle.current - minA) / (maxA - minA)) * 100;
+    angleCursor.style.left    = `${pct}%`;
+    angleMeterVal.textContent = `${Math.round(timing.angle.current)}°`;
+
+    timing.animFrame = requestAnimationFrame(animate);
+  })();
+}
+
+function lockAngleStartPower() {
+  if (timing.phase !== 'angle') return;
+  cancelAnimationFrame(timing.animFrame);
+
+  timing.lockedAngle = timing.angle.current;
+  timing.phase       = 'power';
+
+  angleCursor.classList.add('locked');
+
+  const event = EVENT_PROFILES[eventSelect.value];
+  showPrecBadge(anglePrecBadge, timing.lockedAngle, event.idealAngle, 10);
+
+  timing.power.current = POWER_MIN;
+  timing.power.dir     = 1;
+  powerCursor.classList.remove('locked');
+
+  setPhaseActive('power');
+  throwBtn.textContent = 'Lock Power!';
+
+  const speed = event.speeds.power * speedMultiplier();
+
+  (function animate() {
+    if (timing.phase !== 'power') return;
+
+    timing.power.current += speed * timing.power.dir;
+    if (timing.power.current >= POWER_MAX) { timing.power.current = POWER_MAX; timing.power.dir = -1; }
+    else if (timing.power.current <= POWER_MIN) { timing.power.current = POWER_MIN; timing.power.dir = 1; }
+
+    const pct = ((timing.power.current - POWER_MIN) / (POWER_MAX - POWER_MIN)) * 100;
+    powerCursor.style.left    = `${pct}%`;
+    powerMeterVal.textContent = `${Math.round(timing.power.current)}%`;
+
+    timing.animFrame = requestAnimationFrame(animate);
+  })();
+}
+
+function lockPowerAndThrow() {
+  if (timing.phase !== 'power') return;
+  cancelAnimationFrame(timing.animFrame);
+
+  timing.lockedPower = timing.power.current;
+  timing.phase       = 'idle';
+
+  powerCursor.classList.add('locked');
+
+  const powerIdeal = (POWER_SWEET_MIN + POWER_SWEET_MAX) / 2;
+  showPrecBadge(powerPrecBadge, timing.lockedPower, powerIdeal, 15);
+
+  setPhaseActive('done');
+  throwBtn.textContent = 'Start Throw!';
+  lockControls(false);
+
+  executeThrow(Math.round(timing.lockedAngle), Math.round(timing.lockedPower));
+}
+
+function handleThrowBtn() {
+  if (timing.phase === 'idle')  startAnglePhase();
+  else if (timing.phase === 'angle') lockAngleStartPower();
+  else if (timing.phase === 'power') lockPowerAndThrow();
+}
+
+// --- Core throw execution ---
+function executeThrow(angle, power) {
   const eventKey   = eventSelect.value;
   const athleteKey = athleteSelect.value;
-  const power      = Number(powerInput.value);
-  const angle      = Number(angleInput.value);
   const playerName = playerNameInput.value.trim() || 'Athlete';
 
   const result = calculateThrow(eventKey, athleteKey, power, angle);
 
-  state.attempts      += 1;
-  state.roundAttempt  += 1;
+  state.attempts     += 1;
+  state.roundAttempt += 1;
   attemptsEl.textContent     = state.attempts;
   roundAttemptEl.textContent = state.roundAttempt;
 
   let isRecord = false;
 
   if (result.foul) {
-    statusEl.textContent = 'FOUL – adjust angle or power.';
+    statusEl.textContent = 'FOUL – too far outside the legal zone!';
     statusEl.className   = 'foul';
     soundFoul();
     animateThrow(true, false);
@@ -369,16 +567,25 @@ function handleThrow() {
 
   if (state.roundAttempt >= MAX_ROUND) {
     throwBtn.disabled    = true;
+    throwBtn.textContent = 'Start Throw!';
     statusEl.textContent = 'Round complete. Start a new 6-throw round.';
     statusEl.className   = '';
   }
 }
 
+// --- Round / session control ---
 function startNewRound() {
+  cancelAnimationFrame(timing.animFrame);
+  timing.phase = 'idle';
+
   state.roundAttempt   = 0;
   state.roundDistances = [];
   roundAttemptEl.textContent = '0';
   throwBtn.disabled    = false;
+  throwBtn.textContent = 'Start Throw!';
+  lockControls(false);
+  setPhaseActive('idle');
+  resetTimingUI();
   statusEl.textContent = 'New round started. Good luck!';
   statusEl.className   = '';
   renderRanking();
@@ -386,6 +593,9 @@ function startNewRound() {
 }
 
 function resetSession() {
+  cancelAnimationFrame(timing.animFrame);
+  timing.phase = 'idle';
+
   state.attempts       = 0;
   state.roundAttempt   = 0;
   state.best           = 0;
@@ -396,9 +606,13 @@ function resetSession() {
   roundAttemptEl.textContent = '0';
   lastThrow.textContent      = '-- m';
   bestThrow.textContent      = '-- m';
-  throwBtn.disabled          = false;
-  statusEl.textContent       = 'Session reset. Round ready.';
-  statusEl.className         = '';
+  throwBtn.disabled           = false;
+  throwBtn.textContent        = 'Start Throw!';
+  lockControls(false);
+  setPhaseActive('idle');
+  resetTimingUI();
+  statusEl.textContent = 'Session reset. Press Start Throw!';
+  statusEl.className   = '';
 
   renderHistory();
   renderRanking();
@@ -407,14 +621,26 @@ function resetSession() {
 }
 
 // --- Event listeners ---
-powerInput.addEventListener('input', () => { powerValue.textContent = powerInput.value; });
-angleInput.addEventListener('input', () => { angleValue.textContent = angleInput.value; });
-eventSelect.addEventListener('change', renderDescription);
+eventSelect.addEventListener('change', () => {
+  if (timing.phase === 'idle') renderDescription();
+});
 windToggle.addEventListener('change', generateWind);
 playerNameInput.addEventListener('input', renderLeaderboard);
-throwBtn.addEventListener('click', handleThrow);
+throwBtn.addEventListener('click', handleThrowBtn);
 newRoundBtn.addEventListener('click', startNewRound);
 resetBtn.addEventListener('click', resetSession);
+
+// Click directly on a meter to lock in
+angleMeter.addEventListener('click', () => { if (timing.phase === 'angle') lockAngleStartPower(); });
+powerMeter.addEventListener('click', () => { if (timing.phase === 'power') lockPowerAndThrow(); });
+
+// Spacebar lock-in (prevents page scroll)
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && timing.phase !== 'idle') {
+    e.preventDefault();
+    handleThrowBtn();
+  }
+});
 
 // --- Init ---
 renderDescription();
@@ -423,3 +649,4 @@ renderRecords();
 buildLbTabs();
 renderLeaderboard();
 generateWind();
+setPhaseActive('idle');
