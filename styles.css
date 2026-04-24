@@ -323,6 +323,200 @@ button:active:not(:disabled) {
   100% { opacity: 0; }
 }
 
+/* ── Timing game ── */
+
+.timing-section {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.phase-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: color-mix(in hsl, var(--panel), black 22%);
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.phase-step {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  opacity: 0.35;
+  font-weight: 600;
+  transition: opacity 0.2s, color 0.2s;
+}
+
+.phase-step.active {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.phase-step.done {
+  opacity: 0.85;
+  color: var(--good);
+}
+
+.phase-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--line);
+  font-size: 0.68rem;
+  flex-shrink: 0;
+}
+
+.phase-step.active .phase-num {
+  background: var(--accent);
+  color: #1f1f1f;
+}
+
+.phase-step.done .phase-num {
+  background: var(--good);
+  color: #1f1f1f;
+}
+
+.phase-arrow {
+  opacity: 0.25;
+  font-size: 0.85rem;
+}
+
+/* Meter groups */
+.meter-group {
+  display: grid;
+  gap: 0.28rem;
+  opacity: 0.38;
+  transition: opacity 0.25s;
+}
+
+.meter-group.meter-active {
+  opacity: 1;
+}
+
+.meter-group.meter-locked {
+  opacity: 0.72;
+}
+
+.meter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.meter-title {
+  font-size: 0.85rem;
+  opacity: 0.88;
+}
+
+.meter-val {
+  font-size: 1.05rem;
+  color: var(--accent);
+  min-width: 3.2rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The bar itself */
+.timing-meter {
+  position: relative;
+  height: 46px;
+  background: color-mix(in hsl, var(--panel), black 28%);
+  border: 2px solid var(--line);
+  border-radius: 9px;
+  overflow: hidden;
+  cursor: default;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.meter-group.meter-active .timing-meter {
+  border-color: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 0 0 2px color-mix(in hsl, var(--accent), transparent 70%);
+}
+
+.meter-group.meter-locked .timing-meter {
+  border-color: var(--good);
+}
+
+.sweet-zone {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: rgba(103, 209, 122, 0.22);
+  border-left: 1px solid rgba(103, 209, 122, 0.55);
+  border-right: 1px solid rgba(103, 209, 122, 0.55);
+  pointer-events: none;
+}
+
+.timing-cursor {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  width: 5px;
+  border-radius: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.timing-cursor.locked {
+  background: var(--good);
+  box-shadow: 0 0 10px var(--good);
+}
+
+.meter-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 1.1rem;
+}
+
+.meter-hint {
+  font-size: 0.72rem;
+  opacity: 0.55;
+}
+
+/* Precision badges */
+.prec-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+
+.prec-badge.visible {
+  opacity: 1;
+}
+
+.prec-perfect { color: #ffd700; }
+.prec-great   { color: var(--good); }
+.prec-good    { color: var(--accent-2); }
+.prec-off     { color: #ff8c69; }
+
+/* Spacebar hint */
+.key-hint {
+  font-size: 0.72rem;
+  opacity: 0.45;
+  text-align: center;
+  margin: 0;
+}
+
+kbd {
+  background: var(--line);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.68rem;
+  font-family: monospace;
+}
+
 @media (max-width: 780px) {
   .app {
     grid-template-columns: 1fr;
