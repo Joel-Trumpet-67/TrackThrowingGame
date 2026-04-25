@@ -517,6 +517,21 @@ kbd {
   font-family: monospace;
 }
 
+/* ── Field canvas ── */
+.field-wrap {
+  width: min(1100px, 92vw);
+  margin: 0 auto 1rem;
+}
+
+#fieldCanvas {
+  display: block;
+  width: 100%;
+  height: 220px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #0d1f2d;
+}
+
 @media (max-width: 780px) {
   .app {
     grid-template-columns: 1fr;
