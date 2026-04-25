@@ -658,235 +658,326 @@ const fctx        = fieldCanvas.getContext('2d');
 let   fieldW = 0, fieldH = 0;
 
 const fieldState = {
-  landingMarkers: [], // { dist, foul }
-  ballAnim: null,     // active throw animation
-  athletePose: 'idle' // 'idle' | 'throw' | 'follow'
+  landingMarkers: [],  // { dist, foul }
+  ballTrail: [],       // last N { bx, by } positions for comet trail
+  animMaxBy: 20,       // peak height used for vertical scaling
+  animating: false,
 };
+
+// Keep HUD event label in sync with the select
+function syncHudEvent() {
+  const el = document.getElementById('hudEventLabel');
+  if (el) el.textContent = EVENT_PROFILES[eventSelect.value].name.toUpperCase();
+}
+eventSelect.addEventListener('change', syncHudEvent);
+syncHudEvent();
 
 function resizeField() {
   fieldW = fieldCanvas.width  = fieldCanvas.offsetWidth;
   fieldH = fieldCanvas.height = fieldCanvas.offsetHeight;
   drawFieldScene();
 }
-
 window.addEventListener('resize', resizeField);
 resizeField();
 
-// Map a distance (metres) to a canvas X position
+function groundY() { return Math.round(fieldH * 0.70); }
+function throwerX() { return Math.round(fieldW * 0.10); }
 function distToCanvasX(dist) {
-  const maxDist = 100;
-  return fieldW * 0.09 + (dist / maxDist) * fieldW * 0.87;
+  return throwerX() + (dist / 100) * (fieldW * 0.85);
 }
 
-function groundY() { return fieldH * 0.68; }
-
+// ── Main field renderer ────────────────────────────────────────────────────
 function drawFieldScene() {
   if (!fctx || fieldW === 0) return;
   const gy = groundY();
+  const ox = throwerX();
 
-  // Sky gradient
+  // Sky
   const sky = fctx.createLinearGradient(0, 0, 0, gy);
-  sky.addColorStop(0, '#0d1f2d');
-  sky.addColorStop(1, '#1a3020');
+  sky.addColorStop(0,   '#09141e');
+  sky.addColorStop(0.5, '#0d2318');
+  sky.addColorStop(1,   '#153320');
   fctx.fillStyle = sky;
   fctx.fillRect(0, 0, fieldW, gy);
 
-  // Grass
-  const grass = fctx.createLinearGradient(0, gy, 0, fieldH);
-  grass.addColorStop(0, '#2d5a1b');
-  grass.addColorStop(1, '#1e3d12');
-  fctx.fillStyle = grass;
-  fctx.fillRect(0, gy, fieldW, fieldH - gy);
-
-  // Sector fan lines
-  fctx.save();
-  fctx.strokeStyle = '#c8b850';
-  fctx.lineWidth = 1;
-  fctx.globalAlpha = 0.28;
-  const ox = fieldW * 0.09, oy = gy;
-  for (let a = 22; a <= 50; a += 7) {
-    const r   = fieldW * 1.1;
-    const rad = a * Math.PI / 180;
-    fctx.beginPath();
-    fctx.moveTo(ox, oy);
-    fctx.lineTo(ox + r * Math.cos(rad), oy - r * Math.sin(rad));
-    fctx.stroke();
+  // Grass mowing stripes
+  const sw = Math.max(28, fieldW / 20);
+  for (let x = 0; x < fieldW; x += sw) {
+    fctx.fillStyle = Math.floor(x / sw) % 2 === 0 ? '#294e17' : '#2c5419';
+    fctx.fillRect(x, gy, sw, fieldH - gy);
   }
-  fctx.restore();
 
-  // Distance tick marks + labels
+  // Sector fill (legal throwing cone)
+  const ev = EVENT_PROFILES[eventSelect.value];
+  const [minA, maxA] = ev.foulAngleRange;
+  const sLen = fieldW * 1.3;
   fctx.save();
-  fctx.strokeStyle = '#c8b850';
-  fctx.fillStyle   = 'rgba(255,255,255,0.35)';
-  fctx.font        = '10px monospace';
-  fctx.textAlign   = 'center';
-  fctx.lineWidth   = 1;
-  for (let d = 20; d <= 100; d += 10) {
-    const tx = distToCanvasX(d);
-    fctx.globalAlpha = 0.3;
-    fctx.beginPath();
-    fctx.moveTo(tx, gy - 5);
-    fctx.lineTo(tx, gy + 5);
-    fctx.stroke();
-    fctx.globalAlpha = 0.35;
-    fctx.fillText(d + 'm', tx, gy + 15);
-  }
-  fctx.restore();
-
-  // Throw circle
-  fctx.save();
-  fctx.strokeStyle = '#aaa';
-  fctx.lineWidth   = 2;
   fctx.beginPath();
-  fctx.arc(fieldW * 0.09, gy, 14, 0, Math.PI * 2);
-  fctx.stroke();
+  fctx.moveTo(ox, gy);
+  fctx.lineTo(ox + sLen * Math.cos(minA * Math.PI/180), gy - sLen * Math.sin(minA * Math.PI/180));
+  fctx.lineTo(ox + sLen * Math.cos(maxA * Math.PI/180), gy - sLen * Math.sin(maxA * Math.PI/180));
+  fctx.closePath();
+  fctx.fillStyle = 'rgba(160, 255, 100, 0.045)';
+  fctx.fill();
+
+  // Sector boundary lines (dashed white)
+  fctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  fctx.lineWidth = 1.5;
+  fctx.setLineDash([7, 5]);
+  [minA, maxA].forEach(a => {
+    const r = a * Math.PI / 180;
+    fctx.beginPath();
+    fctx.moveTo(ox, gy);
+    fctx.lineTo(ox + sLen * Math.cos(r), gy - sLen * Math.sin(r));
+    fctx.stroke();
+  });
+  fctx.setLineDash([]);
   fctx.restore();
 
-  // Previous landing markers
-  fieldState.landingMarkers.slice(-6).forEach((m, i, arr) => {
-    const alpha = 0.15 + (i / arr.length) * 0.35;
-    drawLandingX(m.dist, m.foul, alpha);
+  // Ground horizon line
+  fctx.strokeStyle = 'rgba(255,255,255,0.10)';
+  fctx.lineWidth = 1;
+  fctx.beginPath();
+  fctx.moveTo(0, gy); fctx.lineTo(fieldW, gy);
+  fctx.stroke();
+
+  // Distance arc bands on grass (semi-circles from thrower)
+  fctx.save();
+  for (let d = 20; d <= 100; d += 20) {
+    const r = (d / 100) * fieldW * 0.85;
+    fctx.strokeStyle = d % 40 === 0 ? 'rgba(255,220,80,0.18)' : 'rgba(255,255,255,0.08)';
+    fctx.lineWidth = d % 40 === 0 ? 1.5 : 1;
+    fctx.beginPath();
+    fctx.arc(ox, gy, r, -Math.PI * 0.55, -Math.PI * 0.05);
+    fctx.stroke();
+  }
+  fctx.restore();
+
+  // Distance tick marks + labels on ground
+  fctx.save();
+  fctx.textAlign = 'center';
+  for (let d = 20; d <= 90; d += 10) {
+    const tx = distToCanvasX(d);
+    fctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    fctx.lineWidth = 1;
+    fctx.beginPath(); fctx.moveTo(tx, gy - 4); fctx.lineTo(tx, gy + 6); fctx.stroke();
+    fctx.fillStyle = d % 20 === 0 ? 'rgba(255,220,80,0.55)' : 'rgba(255,255,255,0.25)';
+    fctx.font = d % 20 === 0 ? 'bold 10px monospace' : '9px monospace';
+    fctx.fillText(d + 'm', tx, gy + 18);
+  }
+  fctx.restore();
+
+  // Throw circle — concrete pad
+  fctx.save();
+  fctx.fillStyle = '#5a6570';
+  fctx.beginPath(); fctx.arc(ox, gy, 16, 0, Math.PI * 2); fctx.fill();
+  fctx.strokeStyle = '#9aabb8'; fctx.lineWidth = 2;
+  fctx.beginPath(); fctx.arc(ox, gy, 16, 0, Math.PI * 2); fctx.stroke();
+  // hash marks
+  fctx.strokeStyle = '#7a8b98'; fctx.lineWidth = 1;
+  for (let a = 0; a < 360; a += 45) {
+    const r = a * Math.PI / 180;
+    fctx.beginPath();
+    fctx.moveTo(ox + 11 * Math.cos(r), gy + 11 * Math.sin(r));
+    fctx.lineTo(ox + 16 * Math.cos(r), gy + 16 * Math.sin(r));
+    fctx.stroke();
+  }
+  fctx.restore();
+
+  // Canvas HUD overlay
+  fctx.save();
+  // Attempt counter — top left
+  fctx.font = 'bold 13px monospace';
+  fctx.textAlign = 'left';
+  fctx.fillStyle = state.roundAttempt >= MAX_ROUND ? '#e05c5c' : 'rgba(255,255,255,0.55)';
+  fctx.fillText(`${state.roundAttempt} / 6`, 10, 20);
+  // Event name — top center
+  fctx.textAlign = 'center';
+  fctx.fillStyle = 'rgba(255, 200, 87, 0.75)';
+  fctx.font = 'bold 12px monospace';
+  fctx.fillText(ev.name.toUpperCase(), fieldW / 2, 20);
+  // Best throw — top right
+  if (state.best > 0) {
+    fctx.textAlign = 'right';
+    fctx.fillStyle = 'rgba(103, 209, 122, 0.65)';
+    fctx.font = '11px monospace';
+    fctx.fillText('PB ' + state.best.toFixed(2) + ' m', fieldW - 10, 20);
+  }
+  fctx.restore();
+
+  // Previous landing markers (fading)
+  fieldState.landingMarkers.slice(-8).forEach((m, i, arr) => {
+    drawLandingX(m.dist, m.foul, 0.12 + (i / arr.length) * 0.55);
   });
+
+  // Idle athlete (only when not animating)
+  if (!fieldState.animating) {
+    drawAthlete('idle');
+  }
 }
 
+// ── Landing marker ────────────────────────────────────────────────────────
 function drawLandingX(dist, foul, alpha = 1) {
+  if (dist <= 0) return;
   const x  = distToCanvasX(dist);
   const gy = groundY();
   fctx.save();
-  fctx.globalAlpha  = alpha;
-  fctx.strokeStyle  = foul ? '#e05c5c' : '#ff4444';
-  fctx.lineWidth    = alpha >= 0.9 ? 2.5 : 1.5;
-  const s = 6;
+  fctx.globalAlpha = alpha;
+  fctx.strokeStyle = foul ? '#e05c5c' : '#ff5533';
+  fctx.lineWidth   = alpha >= 0.85 ? 2.5 : 1.5;
+  const s = 7;
   fctx.beginPath();
-  fctx.moveTo(x - s, gy - s); fctx.lineTo(x + s, gy + s);
-  fctx.moveTo(x + s, gy - s); fctx.lineTo(x - s, gy + s);
+  fctx.moveTo(x-s, gy-s); fctx.lineTo(x+s, gy+s);
+  fctx.moveTo(x+s, gy-s); fctx.lineTo(x-s, gy+s);
   fctx.stroke();
-  if (alpha >= 0.9) {
-    fctx.fillStyle = foul ? '#e05c5c' : '#ff4444';
+  if (alpha >= 0.85 && !foul) {
+    fctx.fillStyle = '#ff5533';
     fctx.font      = 'bold 12px monospace';
     fctx.textAlign = 'left';
-    fctx.fillText(dist.toFixed(2) + ' m', x + 9, gy - 3);
+    fctx.shadowColor = '#000'; fctx.shadowBlur = 4;
+    fctx.fillText(dist.toFixed(2) + ' m', x + 10, gy - 2);
   }
   fctx.restore();
 }
 
+// ── Athlete stick figure ──────────────────────────────────────────────────
 function drawAthlete(pose) {
-  const x  = fieldW * 0.09;
+  const x  = throwerX();
   const gy = groundY();
   fctx.save();
   fctx.strokeStyle = '#ffc857';
-  fctx.lineWidth   = 2.5;
+  fctx.lineWidth   = 3;
   fctx.lineCap     = 'round';
+  fctx.lineJoin    = 'round';
 
   // Head
-  fctx.beginPath();
-  fctx.arc(x, gy - 50, 8, 0, Math.PI * 2);
-  fctx.stroke();
-
+  fctx.beginPath(); fctx.arc(x, gy - 56, 9, 0, Math.PI * 2); fctx.stroke();
   // Body
-  fctx.beginPath();
-  fctx.moveTo(x, gy - 42);
-  fctx.lineTo(x, gy - 18);
-  fctx.stroke();
+  fctx.beginPath(); fctx.moveTo(x, gy-47); fctx.lineTo(x, gy-20); fctx.stroke();
 
   if (pose === 'idle') {
-    fctx.beginPath(); fctx.moveTo(x, gy - 34); fctx.lineTo(x - 16, gy - 24); fctx.stroke();
-    fctx.beginPath(); fctx.moveTo(x, gy - 34); fctx.lineTo(x + 16, gy - 24); fctx.stroke();
-    fctx.beginPath(); fctx.moveTo(x, gy - 18); fctx.lineTo(x - 9,  gy);      fctx.stroke();
-    fctx.beginPath(); fctx.moveTo(x, gy - 18); fctx.lineTo(x + 9,  gy);      fctx.stroke();
+    fctx.beginPath(); fctx.moveTo(x, gy-38); fctx.lineTo(x-17, gy-26); fctx.stroke();
+    fctx.beginPath(); fctx.moveTo(x, gy-38); fctx.lineTo(x+17, gy-26); fctx.stroke();
+    fctx.beginPath(); fctx.moveTo(x, gy-20); fctx.lineTo(x-11, gy);    fctx.stroke();
+    fctx.beginPath(); fctx.moveTo(x, gy-20); fctx.lineTo(x+11, gy);    fctx.stroke();
   } else if (pose === 'throw') {
-    fctx.beginPath(); fctx.moveTo(x, gy - 34); fctx.lineTo(x + 22, gy - 50); fctx.stroke();
-    fctx.beginPath(); fctx.moveTo(x, gy - 34); fctx.lineTo(x - 14, gy - 24); fctx.stroke();
-    fctx.beginPath(); fctx.moveTo(x, gy - 18); fctx.lineTo(x - 13, gy);      fctx.stroke();
-    fctx.beginPath(); fctx.moveTo(x, gy - 18); fctx.lineTo(x + 7,  gy);      fctx.stroke();
-  } else { // follow
-    fctx.beginPath(); fctx.moveTo(x, gy - 34); fctx.lineTo(x + 24, gy - 32); fctx.stroke();
-    fctx.beginPath(); fctx.moveTo(x, gy - 34); fctx.lineTo(x - 12, gy - 26); fctx.stroke();
-    fctx.beginPath(); fctx.moveTo(x, gy - 18); fctx.lineTo(x - 10, gy);      fctx.stroke();
-    fctx.beginPath(); fctx.moveTo(x, gy - 18); fctx.lineTo(x + 13, gy);      fctx.stroke();
+    // Throwing arm raised, wide power stance
+    fctx.strokeStyle = '#ffe090';
+    fctx.lineWidth = 3.5;
+    fctx.beginPath(); fctx.moveTo(x, gy-38); fctx.lineTo(x+26, gy-58); fctx.stroke();
+    fctx.strokeStyle = '#ffc857'; fctx.lineWidth = 3;
+    fctx.beginPath(); fctx.moveTo(x, gy-38); fctx.lineTo(x-16, gy-26); fctx.stroke();
+    fctx.beginPath(); fctx.moveTo(x, gy-20); fctx.lineTo(x-16, gy);    fctx.stroke();
+    fctx.beginPath(); fctx.moveTo(x, gy-20); fctx.lineTo(x+8,  gy);    fctx.stroke();
+  } else { // follow-through
+    fctx.beginPath(); fctx.moveTo(x, gy-38); fctx.lineTo(x+24, gy-34); fctx.stroke();
+    fctx.beginPath(); fctx.moveTo(x, gy-38); fctx.lineTo(x-14, gy-28); fctx.stroke();
+    fctx.beginPath(); fctx.moveTo(x, gy-20); fctx.lineTo(x-11, gy);    fctx.stroke();
+    fctx.beginPath(); fctx.moveTo(x, gy-20); fctx.lineTo(x+15, gy);    fctx.stroke();
   }
   fctx.restore();
 }
 
-function drawBallAt(bx, by, totalDist) {
-  const gy       = groundY();
-  const maxDist  = 100;
-  const scaleX   = (fieldW * 0.87) / maxDist;
-  const peakH    = fieldH * 0.55;
-  const maxBy    = Math.max(10, totalDist * 0.3);
-  const ox       = fieldW * 0.09;
+// ── Ball with comet trail ─────────────────────────────────────────────────
+function drawBallWithTrail() {
+  if (fieldState.ballTrail.length === 0) return;
+  const gy     = groundY();
+  const ox     = throwerX();
+  const scaleX = (fieldW * 0.85) / 100;
+  const peakH  = fieldH * 0.62;
+  const maxBy  = fieldState.animMaxBy;
 
-  const sx = ox + bx * scaleX;
-  const sy = gy - (by / maxBy) * peakH;
+  // Trail
+  fieldState.ballTrail.forEach((p, i) => {
+    const frac = i / fieldState.ballTrail.length;
+    const sx   = ox + p.bx * scaleX;
+    const sy   = gy - (p.by / maxBy) * peakH;
+    fctx.save();
+    fctx.globalAlpha = frac * 0.45;
+    fctx.fillStyle   = '#fff';
+    fctx.beginPath();
+    fctx.arc(sx, sy, 2 + frac * 4, 0, Math.PI * 2);
+    fctx.fill();
+    fctx.restore();
+  });
 
-  // Shadow
+  // Ball head
+  const last = fieldState.ballTrail[fieldState.ballTrail.length - 1];
+  const sx = ox + last.bx * scaleX;
+  const sy = gy - (last.by / maxBy) * peakH;
+
+  // Ground shadow (scales with height)
+  const shadowScale = Math.max(0, 1 - last.by / maxBy);
   fctx.save();
-  fctx.fillStyle   = 'rgba(0,0,0,0.35)';
+  fctx.globalAlpha = 0.3 * shadowScale;
+  fctx.fillStyle = '#000';
   fctx.beginPath();
-  fctx.ellipse(sx, gy + 5, 7, 2.5, 0, 0, Math.PI * 2);
+  fctx.ellipse(sx, gy + 4, 9 * shadowScale + 3, 2.5, 0, 0, Math.PI * 2);
   fctx.fill();
+  fctx.restore();
 
-  // Ball
+  // Glowing ball
+  fctx.save();
+  const glow = fctx.createRadialGradient(sx, sy, 0, sx, sy, 12);
+  glow.addColorStop(0,   'rgba(255,255,255,1)');
+  glow.addColorStop(0.4, 'rgba(255,240,180,0.7)');
+  glow.addColorStop(1,   'rgba(255,200,80,0)');
+  fctx.fillStyle = glow;
+  fctx.beginPath(); fctx.arc(sx, sy, 12, 0, Math.PI * 2); fctx.fill();
   fctx.fillStyle = '#ffffff';
-  fctx.beginPath();
-  fctx.arc(sx, sy, 6, 0, Math.PI * 2);
-  fctx.fill();
+  fctx.beginPath(); fctx.arc(sx, sy, 6, 0, Math.PI * 2);  fctx.fill();
   fctx.restore();
 }
 
-// Hook into the existing executeThrow to drive the canvas
+// ── Wrap executeThrow to drive the canvas ─────────────────────────────────
 const _origExecuteThrow = executeThrow;
 executeThrow = function(angle, power) {
-  // Run original game logic
   _origExecuteThrow(angle, power);
 
-  // Pull the last log entry to get result
   const entry = state.log[state.log.length - 1];
   if (!entry) return;
 
-  fieldState.athletePose = 'throw';
-
   if (entry.foul || entry.distance <= 0) {
     fieldState.landingMarkers.push({ dist: 0, foul: true });
-    drawFieldScene();
-    drawAthlete('throw');
-    setTimeout(() => {
-      drawFieldScene();
-      drawAthlete('follow');
-    }, 400);
+    fieldState.animating = true;
+    drawFieldScene(); drawAthlete('throw');
+    setTimeout(() => { fieldState.animating = false; drawFieldScene(); }, 600);
     return;
   }
 
-  // Animate ball arc
   const dist    = entry.distance;
-  const radians = angle * Math.PI / 180;
-  const v0      = power * 0.012; // scale to internal units
-  const v0x     = v0 * Math.cos(radians);
-  const v0y     = v0 * Math.sin(radians);
-  const g       = 0.0025;
+  const rad     = angle * Math.PI / 180;
+  const v0      = power * 0.013;
+  const v0x     = v0 * Math.cos(rad);
+  const v0y     = v0 * Math.sin(rad);
+  const g       = 0.003;
+  const peakT   = v0y / g;
+  fieldState.animMaxBy = Math.max(8, v0y * peakT - 0.5 * g * peakT * peakT);
+  fieldState.ballTrail = [];
+  fieldState.animating = true;
 
   let t = 0;
-  let raf;
-
-  function step() {
+  (function step() {
     const bx = v0x * t;
     const by = v0y * t - 0.5 * g * t * t;
 
+    fieldState.ballTrail.push({ bx, by });
+    if (fieldState.ballTrail.length > 22) fieldState.ballTrail.shift();
+
     drawFieldScene();
-    drawAthlete(t < 12 ? 'throw' : 'follow');
+    drawAthlete(t < 14 ? 'throw' : 'follow');
+    drawBallWithTrail();
 
     if (by < 0 || bx >= dist) {
       fieldState.landingMarkers.push({ dist, foul: false });
+      fieldState.ballTrail = [];
+      fieldState.animating = false;
       drawFieldScene();
       drawAthlete('follow');
       drawLandingX(dist, false, 1);
       return;
     }
-
-    drawBallAt(bx, by, dist);
     t += 1;
-    raf = requestAnimationFrame(step);
-  }
-
-  requestAnimationFrame(step);
+    requestAnimationFrame(step);
+  })();
 };
